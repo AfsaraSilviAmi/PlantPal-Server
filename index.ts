@@ -180,8 +180,12 @@ app.post("/api/chat", async (req, res) => {
       ? req.body.messages
       : [];
 
-    const completion = await groq.chat.completions.create({
+
+    const stream = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
+
+      stream: true,
+
       messages: [
         {
           role: "system",
@@ -203,27 +207,50 @@ Answer questions about:
 - Beginner plants
 - Navigation within PlantPal
 
-If someone asks something unrelated to plants or PlantPal,
-politely answer briefly and guide the conversation back to plants.
-
 Keep answers friendly and concise.
 `,
         },
+
         ...messages,
       ],
     });
 
-    res.send({
-      reply:
-        completion.choices[0].message.content ??
-        "Sorry, I couldn't generate a response.",
-    });
-  } catch (error) {
+
+    res.setHeader(
+      "Content-Type",
+      "text/plain; charset=utf-8"
+    );
+
+    res.setHeader(
+      "Transfer-Encoding",
+      "chunked"
+    );
+
+
+    for await (const chunk of stream) {
+
+      const content =
+        chunk.choices[0]?.delta?.content || "";
+
+
+      if (content) {
+        res.write(content);
+      }
+
+    }
+
+
+    res.end();
+
+
+  } catch(error){
+
     console.error(error);
 
     res.status(500).send({
-      message: "AI failed.",
+      message:"AI failed."
     });
+
   }
 });
     // Send a ping to confirm a successful connection
