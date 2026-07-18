@@ -67,8 +67,46 @@ async function run() {
 //get plants
 app.get("/api/plants", async (req, res) => {
   try {
+    const search = req.query.search as string;
+    const category = req.query.category as string;
+    const difficulty = req.query.difficulty as string;
+
+    const query: any = {};
+
+    if (search) {
+      query.title = {
+        $regex: search,
+        $options: "i",
+      };
+    }
+
+    if (category) {
+      query.category = category;
+    }
+
+    if (difficulty) {
+      query.difficulty = difficulty;
+    }
+
     const result = await plantsCollection
-      .find()
+      .find(query)
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: "Failed to fetch plants.",
+    });
+  }
+});
+app.get("/api/my-plants/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+
+    const result = await plantsCollection
+      .find({ createdByEmail: email })
       .sort({ createdAt: -1 })
       .toArray();
 
@@ -78,7 +116,7 @@ app.get("/api/plants", async (req, res) => {
 
     res.status(500).send({
       success: false,
-      message: "Failed to fetch plants.",
+      message: "Failed to fetch user's plants.",
     });
   }
 });
@@ -108,12 +146,19 @@ app.get("/api/plants/:id", async (req, res) => {
 app.delete("/api/plants/:id", async (req, res) => {
   try {
     const id = req.params.id;
+    const email = req.query.email as string;
 
-    const query = {
+    const result = await plantsCollection.deleteOne({
       _id: new ObjectId(id),
-    };
+      createdByEmail: email,
+    });
 
-    const result = await plantsCollection.deleteOne(query);
+    if (result.deletedCount === 0) {
+      return res.status(403).send({
+        success: false,
+        message: "Unauthorized.",
+      });
+    }
 
     res.send(result);
   } catch (error) {
