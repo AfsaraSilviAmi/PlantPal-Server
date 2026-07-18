@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
-
+import OpenAI from "openai";
 dotenv.config();
 
 const app = express();
@@ -43,6 +43,10 @@ async function run() {
     const db = client.db("plant_pal_db");
     const plantsCollection = db.collection("plants");
     const reviewsCollection = db.collection("reviews");
+    const groq = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1",
+});
 
     //posting plants
     app.post("/api/plants", async (req, res) => {
@@ -167,6 +171,58 @@ app.delete("/api/plants/:id", async (req, res) => {
     res.status(500).send({
       success: false,
       message: "Failed to delete plant.",
+    });
+  }
+});
+app.post("/api/chat", async (req, res) => {
+  try {
+    const messages = Array.isArray(req.body.messages)
+      ? req.body.messages
+      : [];
+
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        {
+          role: "system",
+          content: `
+You are PlantPal AI, an AI assistant inside the PlantPal application.
+
+PlantPal lets users:
+- Browse plants
+- View plant details
+- Add plants
+- Manage their own plants
+
+Answer questions about:
+- Plant care
+- Watering
+- Sunlight
+- Indoor vs outdoor plants
+- Pet-friendly plants
+- Beginner plants
+- Navigation within PlantPal
+
+If someone asks something unrelated to plants or PlantPal,
+politely answer briefly and guide the conversation back to plants.
+
+Keep answers friendly and concise.
+`,
+        },
+        ...messages,
+      ],
+    });
+
+    res.send({
+      reply:
+        completion.choices[0].message.content ??
+        "Sorry, I couldn't generate a response.",
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).send({
+      message: "AI failed.",
     });
   }
 });
