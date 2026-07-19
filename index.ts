@@ -311,6 +311,122 @@ Keep answers friendly and concise.
 
   }
 });
+
+// AI Plant Recommendation Engine
+
+app.post("/api/recommendations", async (req, res) => {
+
+  try {
+
+    const preferences = req.body;
+
+
+    // 1. Get all plants from database
+
+    const plants = await plantsCollection
+      .find({})
+      .toArray();
+
+
+
+    // 2. Create AI prompt
+
+    const prompt = `
+You are PlantPal AI Recommendation Engine.
+
+Your job is to recommend plants based on user preferences.
+
+User Preferences:
+
+${JSON.stringify(preferences)}
+
+
+Available Plants:
+
+${JSON.stringify(plants)}
+
+
+Choose the best 4 plants.
+
+Return ONLY valid JSON.
+
+Format:
+
+[
+ {
+   "plantId":"",
+   "plantName":"",
+   "match":"",
+   "reason":""
+ }
+]
+
+Rules:
+- Recommend only plants from the database.
+- Explain why each plant matches.
+- Match should be percentage like 95%.
+`;
+
+
+
+    // 3. Call AI
+
+    const completion =
+      await groq.chat.completions.create({
+
+        model:"llama-3.3-70b-versatile",
+
+        messages:[
+          {
+            role:"system",
+            content:prompt
+          }
+        ],
+
+        temperature:0.7
+
+      });
+
+
+
+    const aiResponse =
+      completion.choices[0]
+      .message
+      .content;
+
+
+
+    // remove possible markdown
+
+    const cleaned =
+      aiResponse.replace(/```json/g,"")
+      .replace(/```/g,"")
+      .trim();
+
+
+
+    const recommendations =
+      JSON.parse(cleaned);
+
+
+
+    res.send(recommendations);
+
+
+  }
+  catch(error){
+
+    console.log(error);
+
+
+    res.status(500).send({
+      message:"AI recommendation failed"
+    });
+
+  }
+
+
+});
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
