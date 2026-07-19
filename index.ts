@@ -105,6 +105,64 @@ app.get("/api/plants", async (req, res) => {
     });
   }
 });
+//featured plants
+app.get("/api/featured-plants", async (req, res) => {
+  try {
+    const featuredPlants = await plantsCollection
+      .find({})
+      .sort({ rating: -1 })
+      .limit(4)
+      .toArray();
+
+    res.send(featuredPlants);
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to fetch featured plants.",
+    });
+  }
+});
+// Plant category statistics
+app.get("/api/stats/categories", async (req, res) => {
+  try {
+    const stats = await plantsCollection
+      .aggregate([
+        {
+          $group: {
+            _id: "$category",
+            total: {
+              $sum: 1,
+            },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            category: "$_id",
+            total: 1,
+          },
+        },
+        {
+          $sort: {
+            total: -1,
+          },
+        },
+      ])
+      .toArray();
+
+    res.send(stats);
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to load category statistics.",
+    });
+  }
+});
+//manage plants
 app.get("/api/my-plants/:email", async (req, res) => {
   try {
     const email = req.params.email;
