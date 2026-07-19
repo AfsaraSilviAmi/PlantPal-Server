@@ -1,14 +1,14 @@
-import express from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
 import OpenAI from "openai";
+import { createRemoteJWKSet, jwtVerify } from "jose-cjs";
 dotenv.config();
 
 const app = express();
 
 const port = 5000;
-
 
 
 // Middleware
@@ -35,6 +35,35 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
+const JWKS = createRemoteJWKSet(
+  new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
+)
+
+const verifyToken = async (req:Request, res:Response, next:NextFunction) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+
+    (req as any).decoded = payload;
+
+    next();
+  } catch (error) {
+    return res.status(403).json({
+      message: "Forbidden",
+    });
+  }
+};
 
 async function run() {
   try {
@@ -42,14 +71,14 @@ async function run() {
     await client.connect();
     const db = client.db("plant_pal_db");
     const plantsCollection = db.collection("plants");
-    const reviewsCollection = db.collection("reviews");
+
     const groq = new OpenAI({
   apiKey: process.env.GROQ_API_KEY,
   baseURL: "https://api.groq.com/openai/v1",
 });
 
     //posting plants
-    app.post("/api/plants", async (req, res) => {
+    app.post("/api/plants", verifyToken, async (req, res) => {
   try {
     const plant = req.body;
 
@@ -163,7 +192,7 @@ app.get("/api/stats/categories", async (req, res) => {
   }
 });
 //manage plants
-app.get("/api/my-plants/:email", async (req, res) => {
+app.get("/api/my-plants/:email", verifyToken, async (req, res) => {
   try {
     const email = req.params.email;
 
@@ -205,7 +234,7 @@ app.get("/api/plants/:id", async (req, res) => {
 });
 
 //delete plant
-app.delete("/api/plants/:id", async (req, res) => {
+app.delete("/api/plants/:id", verifyToken, async (req, res) => {
   try {
     const id = req.params.id;
     const email = req.query.email as string;
@@ -390,10 +419,7 @@ Rules:
 
 
     const aiResponse =
-      completion.choices[0]
-      .message
-      .content;
-
+  completion.choices[0].message.content ?? "";
 
 
     // remove possible markdown
